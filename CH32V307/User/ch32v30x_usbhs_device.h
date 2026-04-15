@@ -28,6 +28,7 @@ extern "C"
 
 /* General */
 #define pUSBHS_SetupReqPak ((PUSB_SETUP_REQ)USBHS_EP0_Buf)
+#define pUSBHS_SetupReqPakDAP ((PUSB_SETUP_REQ)D_USBHS_EP0_Buf)
 
 #define DEF_UEP_IN 0x80
 #define DEF_UEP_OUT 0x00
@@ -51,6 +52,14 @@ extern "C"
 #define DEF_UEP13 0x0D
 #define DEF_UEP14 0x0E
 #define DEF_UEP15 0x0F
+
+//DAP
+#define USB_EPT_IN          0x80
+#define USB_EPT_OUT         0x00
+#define USB_EPT_CONTROL     0x00
+#define USB_EPT_ISO         0x01
+#define USB_EPT_BULK        0x02
+#define USB_EPT_INTERRUPT   0x03
 
 #define USBHSD_UEP_CFG_BASE 0x40023410
 #define USBHSD_UEP_BUF_MOD_BASE 0x40023418
@@ -134,11 +143,18 @@ extern "C"
     extern __attribute__((aligned(4))) uint8_t USBHS_EP0_Buf[];
     extern __attribute__((aligned(4))) uint8_t USBHS_EP1_Rx_Buf[][DEF_USB_EP1_HS_SIZE];
     extern __attribute__((aligned(4))) uint8_t USBHS_EP2_Tx_Buf[];
+    //DAP Buffer
+    extern __attribute__((aligned(4))) uint8_t D_USBHS_EP0_Buf[];
+    extern __attribute__((aligned(4))) uint8_t D_USBHS_EP1_Tx_Buf[];
+    extern __attribute__((aligned(4))) uint8_t D_USBHS_EP1_Rx_Buf[];
+    extern __attribute__((aligned(4))) uint8_t D_USBHS_EP2_Tx_Buf[];
+    extern __attribute__((aligned(4))) uint8_t D_USBHS_EP3_Tx_Buf[];
+    extern __attribute__((aligned(4))) uint8_t D_USBHS_EP3_Rx_Buf[];
 
     /********************************************************************************/
     /* Function Declaration */
     extern void USBHS_RCC_Init(void);
-    extern void USBHS_Device_Endp_Init(void);
+    extern void USBHS_Device_Endp_Init(int mode);
     extern void USBHS_Device_Init(FunctionalState sta);
     extern void USBHS_Device_SetAddress(uint32_t address);
     extern void USBHS_IRQHandler(void);
@@ -147,6 +163,8 @@ extern "C"
     extern uint8_t USBHS_Endp_DataUp(uint8_t endp, uint8_t *pbuf, uint16_t len,
                                      uint8_t mod);
     extern void USBHS_Feedback(uint32_t freq);
+    extern uint32_t USB_Audio_GetCurrentFreqHz(void);
+    extern volatile int DAPmode;
 
 #ifdef __cplusplus
 }

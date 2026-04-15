@@ -14,4 +14,6 @@
 
 #include "debug.h"
 
+extern void SYSTICK_Init_Config (u_int64_t ticks);
+extern uint32_t SysTick_ms;
 #endif /* __CH32V30x_IT_H */

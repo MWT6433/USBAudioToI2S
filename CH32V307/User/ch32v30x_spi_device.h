@@ -23,8 +23,9 @@ void SPI_Device_Init();
 uint8_t CPLD_GetStatus(uint8_t *version);
 uint8_t CPLD_SetFormat(uint8_t format);
 uint8_t CPLD_GetFormat(uint8_t *format);
+void CPLD_FormatRec();
 
-void CPLD_ChangeFormat();
-void CPLD_RequestFormat();
+uint8_t CPLD_ChangeFormat();
+uint8_t CPLD_RequestFormat(uint32_t freq);
 
 #endif

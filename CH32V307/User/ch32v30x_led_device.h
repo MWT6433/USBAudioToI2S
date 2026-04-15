@@ -4,6 +4,7 @@
 #include "debug.h"
 
 void LED_Device_Init();
-void LED_SetPWM(uint16_t pulse);
+void LED_Set(_Bool status);
+void GPIO_off();
 
 #endif

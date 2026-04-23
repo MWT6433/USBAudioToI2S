@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "D:/fpga/pio/AgRV_pio/platforms/supra"
+		}
+	],
+	"settings": {}
+}

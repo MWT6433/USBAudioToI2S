@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560">
+  <defs>
+    <!-- 背景与光晕 -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#141E33"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3AE8D8" stop-opacity="0.16"/>
+      <stop offset="0.55" stop-color="#7C6CFF" stop-opacity="0.09"/>
+      <stop offset="1" stop-color="#7C6CFF" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 引脚金属渐变 -->
+    <linearGradient id="pin" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8FA3BD"/>
+      <stop offset="0.5" stop-color="#DCE7F5"/>
+      <stop offset="1" stop-color="#8FA3BD"/>
+    </linearGradient>
+    <!-- 左右声道芯片描边 -->
+    <linearGradient id="edgeL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#45F0DC"/>
+      <stop offset="1" stop-color="#22B8D0"/>
+    </linearGradient>
+    <linearGradient id="edgeR" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A094FF"/>
+      <stop offset="1" stop-color="#7A66F0"/>
+    </linearGradient>
+    <linearGradient id="chipBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#101828"/>
+      <stop offset="1" stop-color="#1A2438"/>
+    </linearGradient>
+    <!-- L/R 标题渐变 -->
+    <linearGradient id="lr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3AE8D8"/>
+      <stop offset="1" stop-color="#8A7CFF"/>
+    </linearGradient>
+    <!-- 模拟输出波形：青(左)→紫(右)，两端渐隐 -->
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3AE8D8" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#3AE8D8"/>
+      <stop offset="0.5" stop-color="#BFE9FF"/>
+      <stop offset="0.82" stop-color="#8A7CFF"/>
+      <stop offset="1" stop-color="#8A7CFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.2" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 背景 -->
+  <rect x="0" y="0" width="900" height="560" rx="32" fill="url(#bg)"/>
+  <ellipse cx="450" cy="225" rx="330" ry="200" fill="url(#halo)"/>
+  <!-- 角落声波装饰 -->
+  <g fill="none" stroke="#FFFFFF" stroke-opacity="0.045" stroke-width="2">
+    <circle cx="0" cy="560" r="60"/><circle cx="0" cy="560" r="95"/><circle cx="0" cy="560" r="130"/>
+    <circle cx="900" cy="0" r="60"/><circle cx="900" cy="0" r="95"/><circle cx="900" cy="0" r="130"/>
+  </g>
+
+  <!-- ============ 左声道芯片 ============ -->
+  <g color="#3AE8D8">
+    <!-- 声波弧 -->
+    <g fill="none" stroke="currentColor" stroke-linecap="round">
+      <path d="M 291.7 126.7 A 40 40 0 0 1 348.3 126.7" stroke-width="4" opacity="1"/>
+      <path d="M 276.2 111.2 A 62 62 0 0 1 363.8 111.2" stroke-width="3.5" opacity="0.55"/>
+      <path d="M 260.6 95.6 A 84 84 0 0 1 379.4 95.6" stroke-width="3" opacity="0.3"/>
+    </g>
+    <!-- 引脚（左右各 5） -->
+    <g fill="url(#pin)">
+      <rect x="225" y="166" width="20" height="9" rx="3"/>
+      <rect x="225" y="196" width="20" height="9" rx="3"/>
+      <rect x="225" y="226" width="20" height="9" rx="3"/>
+      <rect x="225" y="256" width="20" height="9" rx="3"/>
+      <rect x="225" y="286" width="20" height="9" rx="3"/>
+      <rect x="395" y="166" width="20" height="9" rx="3"/>
+      <rect x="395" y="196" width="20" height="9" rx="3"/>
+      <rect x="395" y="226" width="20" height="9" rx="3"/>
+      <rect x="395" y="256" width="20" height="9" rx="3"/>
+      <rect x="395" y="286" width="20" height="9" rx="3"/>
+    </g>
+    <!-- 芯片本体 -->
+    <rect x="245" y="155" width="150" height="150" rx="18" fill="url(#chipBody)"
+          stroke="url(#edgeL)" stroke-width="2.5"/>
+    <!-- pin1 标记 -->
+    <circle cx="266" cy="176" r="5" fill="currentColor"/>
+    <!-- die 区域 -->
+    <rect x="276" y="196" width="88" height="72" rx="10" fill="#FFFFFF" fill-opacity="0.03"
+          stroke="currentColor" stroke-opacity="0.55" stroke-width="1.5"/>
+    <text x="320" y="242" text-anchor="middle" font-family="Consolas, 'Courier New', monospace"
+          font-size="28" font-weight="bold" fill="#F2F6FC">43131</text>
+    <text x="320" y="291" text-anchor="middle" font-family="Consolas, 'Courier New', monospace"
+          font-size="15" letter-spacing="4" fill="#6E82A0">CS</text>
+    <text x="320" y="347" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+          font-size="30" font-weight="800" fill="currentColor">L</text>
+  </g>
+
+  <!-- ============ 右声道芯片 ============ -->
+  <g color="#A094FF">
+    <g fill="none" stroke="currentColor" stroke-linecap="round">
+      <path d="M 551.7 126.7 A 40 40 0 0 1 608.3 126.7" stroke-width="4" opacity="1"/>
+      <path d="M 536.2 111.2 A 62 62 0 0 1 623.8 111.2" stroke-width="3.5" opacity="0.55"/>
+      <path d="M 520.6 95.6 A 84 84 0 0 1 639.4 95.6" stroke-width="3" opacity="0.3"/>
+    </g>
+    <g fill="url(#pin)">
+      <rect x="485" y="166" width="20" height="9" rx="3"/>
+      <rect x="485" y="196" width="20" height="9" rx="3"/>
+      <rect x="485" y="226" width="20" height="9" rx="3"/>
+      <rect x="485" y="256" width="20" height="9" rx="3"/>
+      <rect x="485" y="286" width="20" height="9" rx="3"/>
+      <rect x="655" y="166" width="20" height="9" rx="3"/>
+      <rect x="655" y="196" width="20" height="9" rx="3"/>
+      <rect x="655" y="226" width="20" height="9" rx="3"/>
+      <rect x="655" y="256" width="20" height="9" rx="3"/>
+      <rect x="655" y="286" width="20" height="9" rx="3"/>
+    </g>
+    <rect x="505" y="155" width="150" height="150" rx="18" fill="url(#chipBody)"
+          stroke="url(#edgeR)" stroke-width="2.5"/>
+    <circle cx="526" cy="176" r="5" fill="currentColor"/>
+    <rect x="536" y="196" width="88" height="72" rx="10" fill="#FFFFFF" fill-opacity="0.03"
+          stroke="currentColor" stroke-opacity="0.55" stroke-width="1.5"/>
+    <text x="580" y="242" text-anchor="middle" font-family="Consolas, 'Courier New', monospace"
+          font-size="28" font-weight="bold" fill="#F2F6FC">43131</text>
+    <text x="580" y="291" text-anchor="middle" font-family="Consolas, 'Courier New', monospace"
+          font-size="15" letter-spacing="4" fill="#6E82A0">CS</text>
+    <text x="580" y="347" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+          font-size="30" font-weight="800" fill="currentColor">R</text>
+  </g>
+
+  <!-- ============ 中央 ×2 徽章 ============ -->
+  <rect x="401" y="227" width="15" height="6" rx="3" fill="#F5C552" opacity="0.7"/>
+  <rect x="484" y="227" width="15" height="6" rx="3" fill="#F5C552" opacity="0.7"/>
+  <g filter="url(#glow)">
+    <circle cx="450" cy="230" r="33" fill="#101828" stroke="#F5C552" stroke-width="3"/>
+    <circle cx="450" cy="230" r="26" fill="none" stroke="#F5C552" stroke-width="1.5" opacity="0.3"/>
+    <text x="450" y="241" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+          font-size="30" font-weight="800" fill="#F5C552">&#215;2</text>
+  </g>
+
+  <!-- ============ 模拟输出正弦波 ============ -->
+  <path filter="url(#glow)" fill="none" stroke="url(#wave)" stroke-width="3.5" stroke-linecap="round"
+        d="M 130 400 Q 162 374 194 400 Q 226 426 258 400 Q 290 374 322 400
+           Q 354 426 386 400 Q 418 374 450 400 Q 482 426 514 400
+           Q 546 374 578 400 Q 610 426 642 400 Q 674 374 706 400 Q 738 426 770 400"/>
+
+  <!-- ============ 标题 ============ -->
+  <text x="450" y="455" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+        font-size="47" font-weight="800" letter-spacing="5">
+    <tspan fill="#F2F6FC">DUAL </tspan><tspan fill="url(#lr)">CS43131</tspan>
+  </text>
+  <text x="450" y="494" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+        font-size="16" font-weight="500" letter-spacing="3.5" fill="#7E92AF">32 bit / 384 kHz &#183; 130 dB SNR</text>
+</svg>

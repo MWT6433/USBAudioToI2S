@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Unreleased
+
+- **左右 DAC 音量平衡菜单**：新增 `Balance` 菜单项（位于 HPF 与 MCLK 之间）。单击进入调节模式：左旋给左 DAC（0x31）加音量、右旋给右 DAC（0x30）加音量（每格 0.5dB，范围 ±10dB，只增偏置侧、另一侧保持基准音量），再次单击退出回菜单列表。调节界面全屏显示当前值与 L/R 标尺。平衡值随设置一并保存到 Flash（新增 `balance` 字段，占用原结构体填充字节，旧存量设置无需重置即可平滑升级）；主界面非居中时音量下方小字显示 `BAL L2.5`。
+- **引脚重定义（配合新板布线）**：
+  - **RST 合并**：左右 DAC 的复位不再分用 PD2/PC11，统一合并到 **PD8**（两片 RST 硬件并联驱动）。
+  - **INT 移脚**：CS43131 共享中断脚 PB3 → **PD9**，EXTI3 改为 EXTI9（`EXTI9_5_IRQHandler`）。
+  - **FB0/FB1 与静音引脚删除**：FPGA 侧 `buffer_empty`(PIN_31)/`buffer_full`(PIN_19)/`zc_gpio`(PIN_20) 输出端口删除；FIFO 水位/溢出事件/静音状态全部经 SPI 上报。CPLD 固件协议升至 **v5**：新增 `GET_SILENCE (0xE0)` 命令（响应 bit7=Ready bit6=静音，实时电平），MCU 侧 `Audio_IsSilent()` 改为 SPI 轮询，PA8 静音 EXTI 及 `Audio_SetFifoPaused`（无消费者的遗留标志）一并移除。
+  - **MCU 时钟**：HSE 改为 **8MHz 有源时钟**输入（软件本就按 HSE=8MHz × 18 = 144MHz 配置，无需改倍频；`SetSysClockTo144_HSE` 启动时置 `RCC_HSEBYP` 旁路片内晶振放大器）。
+- **CPLD 初始化失败自动进入 DAP 模式**：启动时若 CPLD 握手检查失败（如首次上电 CPLD 尚未烧写固件），不再挂死，而是自动将 USB 切换为 CMSIS-DAP 模式，供外部调试器通过 SWD（PB1/PC5/PA3）烧写 CPLD。烧写完成后断电/复位即可恢复正常音频模式。
+
 ## v1.0.0 — 初始发布
 
 ### 新增功能

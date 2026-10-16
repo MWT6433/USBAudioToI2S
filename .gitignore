@@ -1,0 +1,43 @@
+# MounRiver / Eclipse build output
+obj/
+*.o
+*.d
+
+# IDE generated
+.settings/
+*.launch
+
+# Backup files
+*.bak
+
+# Binary / intermediate
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+
+# AGM supra CPLD project (AGRV2KQ32 is a junction to D:\fpga\pio\AgRV_pio\platforms\supra)
+# Keep only sources: *.v *.sdc *.ve *.qsf *.qpf *.tcl *.ip
+AGRV2KQ32/**/alta_db/
+AGRV2KQ32/**/alta_logs/
+AGRV2KQ32/**/db/
+AGRV2KQ32/**/incremental_db/
+AGRV2KQ32/**/quartus_logs/
+AGRV2KQ32/**/simulation/
+AGRV2KQ32/**/*.asf
+AGRV2KQ32/**/*.qdf
+AGRV2KQ32/**/*.qws
+AGRV2KQ32/**/*.proj
+AGRV2KQ32/**/*.vqm
+AGRV2KQ32/**/*.inc
+AGRV2KQ32/**/audio_cpld_routed.v
+AGRV2KQ32/**/output/
+AGRV2KQ32/**/bc_results/
+AGRV2KQ32/**/bc_summary.txt
+*.rpt
+
+# Local tool state
+.zcode/
+.mrs/
+*.code-workspace

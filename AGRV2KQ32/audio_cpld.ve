@@ -5,13 +5,18 @@ in_ws PIN_23
 in_ck PIN_22
 in_sd PIN_21
 
-buffer_empty PIN_31
-buffer_full PIN_19
+# buffer_empty PIN_31 / buffer_full PIN_19 / zc_gpio PIN_20 removed:
+# FIFO level/events/silence all reported over SPI now.
 
-out_mck PIN_12
-out_ws PIN_15
-out_ck PIN_13
-out_sd PIN_14
+out_mck PIN_14
+out_ws PIN_13
+out_ck PIN_15
+out_sd PIN_12
+
+out_mckb PIN_10
+out_wsb PIN_9
+out_ckb PIN_11
+out_sdb PIN_8
 
 spi_ck PIN_28
 spi_mosi PIN_26

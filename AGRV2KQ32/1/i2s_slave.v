@@ -1,5 +1,5 @@
 module i2s_slave (
-    input clk,
+(* no_global_clock = "true" *) input clk,
     input nrst,
 
     // I2S

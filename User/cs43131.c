@@ -268,25 +268,18 @@ void CS43131_GPIO_Init(void)
     GPIO_Init(GPIOC, &GPIO_InitStructure);
     GPIO_ResetBits(GPIOC, GPIO_Pin_0); // default off
 
-    // PD2: Left DAC reset (active low)
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
+    // PD8: Both DAC resets tied together (active low)
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_Init(GPIOD, &GPIO_InitStructure);
-    GPIO_ResetBits(GPIOD, GPIO_Pin_2); // hold in reset
+    GPIO_ResetBits(GPIOD, GPIO_Pin_8); // hold in reset
 
-    // PC11: Right DAC reset (active low)
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-    GPIO_ResetBits(GPIOC, GPIO_Pin_11); // hold in reset
-
-    // PB3: Shared INT pin (input, pull-up)
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
+    // PD9: Shared INT pin (input, pull-up)
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    GPIO_Init(GPIOD, &GPIO_InitStructure);
 
     // PA1: 4.4mm Headphone detect (input, pull-up). Low: no headphone; High: inserted
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
@@ -302,22 +295,16 @@ void CS43131_GPIO_Init(void)
 
 
     // 在释放 RESET 前预留稳定时间，避免电源和 MCLK 尚未稳定时提前启动 DAC。
-    cs43131_int_pb3_exti_init();
+    cs43131_int_pd9_exti_init();
     Delay_Ms(2);
-    GPIO_SetBits(GPIOD, GPIO_Pin_2); // Left DAC (PD2) exit reset
-    GPIO_SetBits(GPIOC, GPIO_Pin_11); // Right DAC (PC11) exit reset
+    GPIO_SetBits(GPIOD, GPIO_Pin_8); // Both DACs (PD8) exit reset
 }
 
-// 保存设备地址，供中断服务读取寄存器
-static uint8_t s_cs43131_devAddr7 = 0;
 // PDN_DONE 中断到达标志（由ISR或轮询置位）
 static volatile uint8_t s_pdn_done_isr_flag = 0;
 static volatile uint8_t s_cs43131_int_irq_seen = 0;
-// PB3电平缓存用于轮询边沿检测
-static uint8_t s_pb3_prev_level = 0;
-// 当INT为共享线时，支持双DAC地址（默认 0x30 与 0x31）
-static const uint8_t s_cs43131_devAddr7_list[2] = {0x30, 0x31};
-static const uint8_t s_cs43131_devAddr7_count = 2;
+// PD9电平缓存用于轮询边沿检测
+static uint8_t s_pd9_prev_level = 0;
 
 bool Headphone_IsInserted(void)
 {
@@ -341,8 +328,8 @@ cs43131_jack_mode_t Headphone_GetJackMode(void)
 
 // --- Init (still pending complete register map) ---
 void cs43131_init(uint8_t devAddr7) {
-    s_cs43131_devAddr7 = devAddr7;
-    // Step 3: 配置系统时钟源为外部有源 MCLK 24.576MHz
+    // Step 3: 配置系统时钟源为外部直连 MCLK（本板为 CPLD 直出的 49.152/45.1584 MHz，
+    // 即标称 24.576/22.5792 的 2 倍，规格外但比率自洽，详见 cs43131.h 顶部注释）
     // 清除 MCLK_INT(bit2) 与 MCLK_SRC_SEL(bits1:0)，选择直连外部 MCLK（00）
     uint8_t sysclk = 0;
     if (i2c_read_reg24(devAddr7, CS43131_REG_SYSCLK_CTRL1, &sysclk) == 0) {
@@ -388,7 +375,8 @@ int cs43131_enable_asp_interrupts(uint8_t devAddr7)
     return i2c_write_reg24(devAddr7, CS43131_REG_INT_MASK2, mask2);
 }
 
-// 外部有源 MCLK 频率切换：在 24.576 与 22.5792 MHz 间切换
+// 外部直连 MCLK 的家族切换：本板实际在 49.152 MHz（48k 族）与 45.1584 MHz（44.1k 族）
+// 之间切换（CPLD mck_sel 直出，为标称 24.576/22.5792 的 2 倍，详见 cs43131.h 顶部注释）
 int cs43131_switch_mclk_external(uint8_t devAddr7, bool is_24m576)
 {
     // 依据外部有源时钟场景：仅调整 INTSEL 相关位，不切换到 XTAL/RCO
@@ -425,29 +413,29 @@ int cs43131_enable_asp_clocks(uint8_t devAddr7)
     return 0;
 }
 
-// 配置 PB3 为 EXTI3 下降沿中断，并打开 NVIC
-void cs43131_int_pb3_exti_init(void)
+// 配置 PD9 为 EXTI9 下降沿中断，并打开 NVIC
+void cs43131_int_pd9_exti_init(void)
 {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-    GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource3);
+    GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, GPIO_PinSource9);
 
     EXTI_InitTypeDef EXTI_InitStructure = {0};
-    EXTI_InitStructure.EXTI_Line = EXTI_Line3;
+    EXTI_InitStructure.EXTI_Line = EXTI_Line9;
     EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
     EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling;
     EXTI_InitStructure.EXTI_LineCmd = ENABLE;
     EXTI_Init(&EXTI_InitStructure);
-    EXTI_ClearITPendingBit(EXTI_Line3);
+    EXTI_ClearITPendingBit(EXTI_Line9);
 
     NVIC_InitTypeDef NVIC_InitStructure = {0};
-    NVIC_InitStructure.NVIC_IRQChannel = EXTI3_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
     NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
     NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&NVIC_InitStructure);
 }
 
-// 由 EXTI3_IRQHandler 调用
+// 由 EXTI9_5_IRQHandler 调用
 void cs43131_handle_int_isr(void)
 {
     s_cs43131_int_irq_seen = 1;
@@ -465,11 +453,11 @@ int cs43131_wait_pdn_done_via_int(uint32_t timeout_ms)
     return -1;
 }
 
-// 简易轮询：检测PB3上升沿则读取并打印中断信息（无NVIC/EXTI时也可用）
-void cs43131_poll_pb3_and_dump(uint8_t devAddr7)
+// 简易轮询：检测PD9上升沿则读取并打印中断信息（无NVIC/EXTI时也可用）
+void cs43131_poll_pd9_and_dump(uint8_t devAddr7)
 {
-    uint8_t lvl = GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_3);
-    if (!s_pb3_prev_level && lvl) {
+    uint8_t lvl = GPIO_ReadInputDataBit(GPIOD, GPIO_Pin_9);
+    if (!s_pd9_prev_level && lvl) {
         uint8_t s1 = 0, s2 = 0, s3 = 0;
         (void)i2c_read_reg24(devAddr7, CS43131_REG_INT_STATUS1, &s1);
         (void)i2c_read_reg24(devAddr7, CS43131_REG_INT_STATUS2, &s2);
@@ -477,7 +465,7 @@ void cs43131_poll_pb3_and_dump(uint8_t devAddr7)
         printf("[CS43131 INT(RISE)] STATUS1=0x%02X STATUS2=0x%02X STATUS3=0x%02X\r\n", s1, s2, s3);
         if (s1 & CS43131_INT_PDN_DONE) s_pdn_done_isr_flag = 1;
     }
-    s_pb3_prev_level = lvl;
+    s_pd9_prev_level = lvl;
 }
 
 // 诊断：转储关键寄存器状态以排查无声问题
@@ -508,9 +496,9 @@ void cs43131_dump_status(uint8_t devAddr7)
             // 组合提示
             if ((v & (CS43131_ASP_EARLY_INT_MASK|CS43131_ASP_LATE_INT_MASK|CS43131_ASP_ERROR_INT_MASK)) 
                 == (CS43131_ASP_EARLY_INT_MASK|CS43131_ASP_LATE_INT_MASK|CS43131_ASP_ERROR_INT_MASK)) {
-                printf("    Hint: EARLY+LATE+ERROR 同时置位，通常表示I2S时序/极性或数据对齐不匹配；请检查I2S(Philips)模式、1-bit延时、LRCK/BCLK极性、采样位宽对齐。\r\n");
+                printf("    Hint: EARLY+LATE+ERROR all set: usually I2S timing/polarity or data alignment mismatch; check I2S(Philips) mode, 1-bit delay, LRCK/BCLK polarity, sample bit-width alignment.\r\n");
             } else if ((v & CS43131_ASP_NOLRCK_INT_MASK) && !(v & CS43131_ASP_EARLY_INT_MASK) && !(v & CS43131_ASP_LATE_INT_MASK)) {
-                printf("    Hint: NOLRCK 置位，可能上游未输出LRCK或主/从配置错误。\r\n");
+                printf("    Hint: NOLRCK set: upstream may not output LRCK, or master/slave config error.\r\n");
             }
         }
     }
@@ -1038,6 +1026,42 @@ int cs43131_set_pcm_volume(uint8_t devAddr7, uint8_t vol_a, uint8_t vol_b, bool 
     return 0;
 }
 
+// === 左右 DAC 音量平衡 ===
+// 平衡值：0=居中；>0 偏左（左 DAC 0x31 加音量）；<0 偏右（右 DAC 0x30 加音量）。
+// “加音量”= 在基准音量上减小该侧衰减寄存器值，另一侧保持基准不变；
+// 若已到 0x00（0dB 满幅）则钳位不再增加。
+static int8_t g_balance = 0;
+
+int8_t cs43131_get_balance(void)
+{
+    return g_balance;
+}
+
+void cs43131_set_balance(int8_t balance)
+{
+    if (balance > CS43131_BALANCE_MAX_STEPS) balance = CS43131_BALANCE_MAX_STEPS;
+    if (balance < -(int8_t)CS43131_BALANCE_MAX_STEPS) balance = -(int8_t)CS43131_BALANCE_MAX_STEPS;
+    g_balance = balance;
+}
+
+int cs43131_apply_volume_balance(uint8_t base_vol, int8_t balance)
+{
+    cs43131_set_balance(balance);
+
+    int left = (int)base_vol;
+    int right = (int)base_vol;
+    if (g_balance > 0) left -= g_balance;         // 偏左：左 DAC 减小衰减
+    else if (g_balance < 0) right += g_balance;   // 偏右：右 DAC 减小衰减
+    if (left < 0x00) left = 0x00;
+    if (left > 0xFE) left = 0xFE;
+    if (right < 0x00) right = 0x00;
+    if (right > 0xFE) right = 0xFE;
+
+    if (cs43131_set_pcm_volume(0x30, (uint8_t)right, (uint8_t)right, true) != 0) return -1;
+    if (cs43131_set_pcm_volume(0x31, (uint8_t)left, (uint8_t)left, true) != 0) return -1;
+    return 0;
+}
+
 // 新增：显式取消通道静音（清除 PCM_MUTE_A/B）
 int cs43131_unmute_both_channels(uint8_t devAddr7)
 {
@@ -1140,6 +1164,22 @@ int cs43131_cycle_hp_full_scale_both(void)
     return -1;
 #else
     s_hp_full_scale = (cs43131_hp_full_scale_t)((s_hp_full_scale + 1) % (sizeof(s_hp_profiles) / sizeof(s_hp_profiles[0])));
+    return cs43131_apply_hp_runtime_both();
+#endif
+}
+
+// 直接设置耳放模式和满幅输出（用于从 Flash 恢复设置）
+int cs43131_set_hp_config_both(cs43131_hp_amp_mode_t amp_mode, cs43131_hp_full_scale_t full_scale)
+{
+#if CS43131_USE_EXTERNAL_VCPFILT
+    (void)amp_mode; (void)full_scale;
+    return -1;
+#else
+    if ((unsigned)full_scale >= (sizeof(s_hp_profiles) / sizeof(s_hp_profiles[0]))) {
+        return -1;
+    }
+    s_hp_amp_mode = amp_mode;
+    s_hp_full_scale = full_scale;
     return cs43131_apply_hp_runtime_both();
 #endif
 }
@@ -1345,5 +1385,13 @@ int cs43131_toggle_filter_bit_both(uint8_t bit)
 {
     if (cs43131_toggle_filter_bit(0x30, bit) != 0) return -1;
     if (cs43131_toggle_filter_bit(0x31, bit) != 0) return -1;
+    return 0;
+}
+
+// 直接设置两片 DAC 的 PCM Filter Option 寄存器（用于从 Flash 恢复设置）
+int cs43131_set_pcm_filter_opt_both(uint8_t value)
+{
+    if (i2c_write_reg24(0x30, CS43131_REG_PCM_FILTER_OPT, value) != 0) return -1;
+    if (i2c_write_reg24(0x31, CS43131_REG_PCM_FILTER_OPT, value) != 0) return -1;
     return 0;
 }

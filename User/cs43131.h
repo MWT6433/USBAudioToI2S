@@ -216,10 +216,18 @@ extern "C" {
 #define CS43131_DEEMP_ON              0x01u
 // Bit fields for key registers
 // SYSCLK control (0x10006)
+//
+// 关于 MCLK 频率（示波器实测结论，勿按旧注释理解）：
+// 本板 MCLK 由 CPLD 从 49.152/45.1584 MHz 晶振【直出】（见 mck_sel.v），不走 PLL。
+// 这是 CS43131 手册标称 MCLK_INT（24.576/22.5792 MHz）的 2 倍，属规格外运行，
+// 但芯片内部是比率式时钟树：无 MCLK 绝对频率检测，手册仅要求 MCLK_INT 为 Fs
+// 的整数倍（49.152M/48k=1024 成立），所有内部分频结果与标称情形同构，实测稳定。
+// INTSEL 位告知的是【家族假设】（芯片按 24.576 族 / 22.5792 族的比率表分频），
+// 与引脚实际频率并无一一对应关系。
 #define CS43131_SYSCLK_SRC_DIRECT         0x00u
 #define CS43131_SYSCLK_SRC_RCO            0x02u
-#define CS43131_SYSCLK_INTSEL_24M576      0x00u
-#define CS43131_SYSCLK_INTSEL_22M5792     0x04u
+#define CS43131_SYSCLK_INTSEL_24M576      0x00u   // 48k 族（本板引脚实际为 49.152 MHz 直出）
+#define CS43131_SYSCLK_INTSEL_22M5792     0x04u   // 44.1k 族（本板引脚实际为 45.1584 MHz 直出）
 
 // PAD interface config (0x1000D)
 #define CS43131_PAD_ASP_3ST            0x01u
@@ -273,23 +281,24 @@ int cs43131_unmute_both_channels(uint8_t devAddr7);
 int cs43131_get_pcm_filter_opt(uint8_t devAddr7, uint8_t *out_val);
 int cs43131_toggle_filter_bit(uint8_t devAddr7, uint8_t bit);
 int cs43131_toggle_filter_bit_both(uint8_t bit);
+int cs43131_set_pcm_filter_opt_both(uint8_t value);
 int cs43131_pcm_pop_free_power_down_external(uint8_t devAddr7);
 // Diagnostic status dump
 void cs43131_dump_status(uint8_t devAddr7);
 // 新增：读取并输出mono模式相关寄存器状态
 void cs43131_dump_mono_registers(uint8_t devAddr7);
 
-// --- INT(PB3) 中断支持与轮询接口 ---
-// 配置 PB3 为 EXTI3 上升沿中断，并打开 NVIC
-void cs43131_int_pb3_exti_init(void);
+// --- INT(PD9) 中断支持与轮询接口 ---
+// 配置 PD9 为 EXTI9 上升沿中断，并打开 NVIC
+void cs43131_int_pd9_exti_init(void);
 // 取消屏蔽 PDN_DONE 中断源（保留其他掩码位不变）
 void cs43131_enable_int_pdn_done(uint8_t devAddr7);
-// 由 EXTI3_IRQHandler 调用的中断处理：读取并打印 INT_STATUS
+// 由 EXTI9_5_IRQHandler 调用的中断处理：读取并打印 INT_STATUS
 void cs43131_handle_int_isr(void);
 // 使用INT事件替代轮询等待PDN_DONE：在指定超时内等待ISR置位
 int cs43131_wait_pdn_done_via_int(uint32_t timeout_ms);
-// 轮询PB3电平的简易函数：检测到上升沿时，读取并打印中断信息
-void cs43131_poll_pb3_and_dump(uint8_t devAddr7);
+// 轮询PD9电平的简易函数：检测到上升沿时，读取并打印中断信息
+void cs43131_poll_pd9_and_dump(uint8_t devAddr7);
 int cs43131_enable_mono_mode_pcm(uint8_t devAddr7);
 int cs43131_disable_mono_mode_pcm(uint8_t devAddr7);
 int cs43131_apply_jack_mode(cs43131_jack_mode_t mode);
@@ -352,6 +361,19 @@ int cs43131_mute_both_channels(uint8_t devAddr7);
 int cs43131_configure_hp_external_no_detect(uint8_t devAddr7);
 
 int cs43131_set_pcm_volume(uint8_t devAddr7, uint8_t vol_a, uint8_t vol_b, bool link_b_eq_a);
+
+//=============================================================================
+// 左右 DAC 音量平衡（双片 CS43131：0x31=左 DAC，0x30=右 DAC）
+// 平衡值：0=居中；>0=偏左（左 DAC 在基准音量上减小衰减，即加音量）；
+//         <0=偏右（右 DAC 加音量）。每步 0.5dB，与 PCM 音量寄存器步进一致。
+//=============================================================================
+#define CS43131_BALANCE_MAX_STEPS 20  // 平衡调节范围 ±10dB
+
+int8_t cs43131_get_balance(void);
+void cs43131_set_balance(int8_t balance);
+// 以 base_vol 为两声道基准叠加平衡值，写入两片 DAC 音量寄存器
+int cs43131_apply_volume_balance(uint8_t base_vol, int8_t balance);
+
 int cs43131_enable_asp_interrupts(uint8_t devAddr7);
 int cs43131_enable_asp_clocks(uint8_t devAddr7);
 int cs43131_startup_dual_dac(void);
@@ -373,6 +395,7 @@ int cs43131_get_hp_amp_mode(cs43131_hp_amp_mode_t *out_mode);
 int cs43131_get_hp_full_scale(cs43131_hp_full_scale_t *out_scale);
 int cs43131_cycle_hp_amp_mode_both(void);
 int cs43131_cycle_hp_full_scale_both(void);
+int cs43131_set_hp_config_both(cs43131_hp_amp_mode_t amp_mode, cs43131_hp_full_scale_t full_scale);
 
 
 #endif // __CS43131_H__

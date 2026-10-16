@@ -15,7 +15,7 @@
 #endif
 #include "ch32v30x_i2c.h"
 #include "Dec_IIC.h"
-#include "volume_storage.h"
+#include "settings_storage.h"
 #include <stdbool.h>
 #include "ch32v30x_gpio.h"
 
@@ -51,7 +51,8 @@ void hang (const char *str) {
     }
 }
 
-void Audioinit() {
+// 返回 CPLD 是否初始化成功；失败时自动进入 DAP 模式供外部烧写 CPLD
+bool Audioinit() {
     printf ("LLT USB Audio To I2S\r\n");
     printf ("Firmware version: %d, Datetime: %s-%s\r\n", PROGRAM_VERSION, __DATE__, __TIME__);
     printf ("System clk:%d\r\n", SystemCoreClock);
@@ -60,17 +61,29 @@ void Audioinit() {
     // Init SPI
     SPI_Device_Init();
 
-    // Init CPLD
+    // Init CPLD（带重试机制，提高上电时序容错）
     uint8_t cpld_version;
-    if (!CPLD_GetStatus (&cpld_version)) {
-        SetDapMode(1);
-        printf ("CPLD initialization failed!");
-        SetDapMode(1);
+    int cpld_retry = 3;
+    bool cpld_ok = false;
+    while (cpld_retry-- > 0) {
+        if (CPLD_GetStatus(&cpld_version)) {
+            cpld_ok = true;
+            break;
+        }
+        Delay_Ms(50);
+    }
+    if (!cpld_ok) {
+        printf("CPLD initialization failed!\r\n");
         LED_Set(1);
-        // hang ("CPLD initialization failed!");
-    }else SetDapMode(0);
-    printf ("CPLD firmware version:%d\r\n", cpld_version);
-    printf ("==================READY==================\r\n");
+        // 初次上电 CPLD 未烧写固件：自动进入 DAP 模式，通过 USB 以 CMSIS-DAP
+        // 协议向外部调试器提供 SWD（PB1/PC5/PA3）烧写 CPLD。烧写完成后断电/复位即可。
+        printf("Auto entering DAP mode for CPLD programming...\r\n");
+        SetDapMode(1);
+        return false;
+    }
+    SetDapMode(0);
+    printf("CPLD firmware version:%d\r\n", cpld_version);
+    printf("==================READY==================\r\n");
 
     // Init I2S
     I2S_Device_Init();
@@ -87,9 +100,10 @@ void Audioinit() {
     LED_Set (0);
 
     Encoder_Init();
+    return true;
 }
 
-
+//该项目的用户界面由一个oled屏幕与旋转编码器组成，用于调整音频参数和显示当前设置，当系统初始化时，会自动扫描i2c总线上的设备，如果没有检测到oled屏幕，则会不初始化oled屏幕，直接进入音频播放模式，以防止i2c总线阻塞。
 #include "cs43131.h"
 
 // 按当前供电模式执行耳机拔出下电，避免内部电荷泵与外部 VCPFILT 路径混用。
@@ -166,7 +180,14 @@ int main (void) {
 
     CS43131_GPIO_Init();
 
-    Audioinit();
+    if (!Audioinit()) {
+        // CPLD 未初始化（如首次上电未烧写 CPLD 固件）：已自动进入 DAP 模式，
+        // 驻留于此处理 CMSIS-DAP 请求，跳过音频初始化等待外部调试器烧写 CPLD。
+        printf("DAP mode active. Program the CPLD, then power-cycle to resume audio.\r\n");
+        while (1) {
+            usbd_hid_process();
+        }
+    }
 
     cs43131_init(0x30);
     cs43131_init(0x31);
@@ -180,13 +201,10 @@ int main (void) {
     }
     #endif
 
-    // 初始化音量存储模块
-    volume_storage_init();
-
-
-    // // Scan I2C bus to discover connected device addresses (7-bit)
+    // 初始化设置存储模块（Flash 读写）
+    settings_storage_init();
+    // 扫描总线上的i2c设备地址
     I2C_ScanBus();
-    
     if (cs43131_startup_dual_dac() != 0) {
         hang("CS43131 startup failed");
     }
@@ -208,10 +226,11 @@ int main (void) {
     }
 
     
-    // 音量控制变量
+    // 从 Flash 加载保存的设置（音量 + 菜单设置）
     // CS43131 音量范围：0x00=0dB, 0xFF=-127.5dB (每步0.5dB)
-    // 从 Flash 读取保存的音量值，如果无效则使用默认值 -120dB (0xF0)
-    uint8_t current_volume = volume_storage_load();
+    settings_storage_t settings;
+    bool settings_valid = settings_storage_load(&settings);
+    uint8_t current_volume = settings.volume_value;
     int encoderNum = 0;
     int newEncoder = 0;
     uint32_t last_ui_refresh_ms = 0;
@@ -219,35 +238,77 @@ int main (void) {
     uint8_t last_key_pressed = 0xFF;
     uint8_t last_menu_active = 0xFF;
     int last_encoder_for_ui = 0x7FFFFFFF;
+    uint8_t last_pending = 0;   // PEND（未保存）状态快照，变化时触发 UI 刷新
     
-    // 设置初始音量
-    cs43131_set_pcm_volume(0x30, current_volume, current_volume, true);
-    cs43131_set_pcm_volume(0x31, current_volume, current_volume, true);
+    // 应用保存的音量（叠加保存的左右平衡；无效数据时 load 已填默认 balance=0）
+    cs43131_apply_volume_balance(current_volume, settings.balance);
+    
+    // 初始化待保存音量值为当前加载值（确保仅修改菜单设置时也能正确保存音量）
+    g_volume_pending = current_volume;
+
+    // 应用保存的菜单设置（覆盖 DAC 启动默认值）
+    if (settings_valid) {
+        // 恢复 PCM Filter Option 寄存器（F/S, Lat/Ph 等）
+        cs43131_set_pcm_filter_opt_both(settings.filter_opt);
+
+        // 恢复耳放模式与满幅输出（Class, HP FS）
+        cs43131_set_hp_config_both(
+            (cs43131_hp_amp_mode_t)settings.hp_amp_mode,
+            (cs43131_hp_full_scale_t)settings.hp_full_scale
+        );
+
+        // 恢复 MCLK 二分频偏好（CPLD v4+ 才支持；此时 DAC 已上电，走静音包裹版）
+        if (settings.mck_div2 && g_cpld_version >= CPLD_PROTOCOL_VERSION_DIV2) {
+            CPLD_SetMclkDiv2Muted(1);
+        }
+    }
     
     // cs43131_dump_status(0x30);
     // cs43131_dump_status(0x31);
     // 根据当前耳机插入状态初始化耳放供电与静音
     Headphone_Update();
+
+    // 同步编码器硬件初值，避免首次进入循环时产生虚假差值导致音量跳变
+    encoderNum = GetEncoder();
     
     while (1) {
+        // 处理中断登记的后台任务（采样率切换 / DAC 位深配置 / 静音 / Flash 设置保存）
+        AudioMgr_ProcessDeferred();
+
+        // FIFO 水位反馈控制（内部按 system_tick 10ms 节流，SPI 读 CPLD 水位）
+        Audio_FeedbackTask();
+
         Headphone_Update();
         uint8_t key_event = KEY_GetEvent();
-        // if (key_event == 2) { // EVENT_DOUBLE = 2
-        //     if(DAPmode == 1){
-        //         SetDapMode(0);
-        //         LED_Set (0);
-        //     }else{
-        //         SetDapMode(1);
-        //         LED_Set(1);
-        //     }
-
-        // }
         
         newEncoder = GetEncoder();
         uint8_t key_pressed = KEY_IsPressed();
         uint8_t ui_active = Menu_IsActive();
         uint32_t now_ms = SysTick_ms;
         uint8_t need_ui_refresh = 0;
+
+        // 手动保存：非菜单 + 单击 + "输出无声" + 有未保存修改 → 置保存请求。
+        // "输出无声" = FPGA 码流静音(GET_SILENCE) 或 DAC 已静音 或 音量在最大衰减档：
+        // 保存的 Flash 擦写会冻结中断数 ms，只要输出侧无声，毛刺就听不见。
+        // Flash 保存由 AudioMgr_ProcessDeferred() 在主循环执行。
+        if (key_event == EVENT_CLICK && ui_active == 0) {
+            uint8_t output_silent = ((Audio_IsSilent() == Bit_SET) || g_dac_muted ||
+                                     (current_volume >= 0xFE)) ? 1 : 0;
+            if (output_silent && (g_volume_modified_flag || g_menu_settings_modified_flag)) {
+                g_settings_save_pending = 1;
+            } else {
+                // 诊断：单击未触发保存时打印原因（各判定分量 / CPLD 协议版本）
+                printf("[SAVE] click skipped: stream_silent=%d dac_muted=%d vol=0x%02X mod=%d/%d cpld_v=%d\r\n",
+                       (Audio_IsSilent() == Bit_SET) ? 1 : 0, g_dac_muted, current_volume,
+                       g_volume_modified_flag, g_menu_settings_modified_flag, g_cpld_version);
+            }
+        }
+
+        // PEND（未保存）状态快照：变化时触发 UI 刷新
+        uint8_t cur_pending = (g_volume_modified_flag || g_menu_settings_modified_flag) ? 1 : 0;
+        if (cur_pending != last_pending) {
+            need_ui_refresh = 1;
+        }
 
         if ((uint32_t)(now_ms - last_ui_refresh_ms) >= UI_REFRESH_INTERVAL_MS) {
             need_ui_refresh = 1;
@@ -270,6 +331,7 @@ int main (void) {
             last_key_pressed = key_pressed;
             last_menu_active = ui_active;
             last_encoder_for_ui = newEncoder;
+            last_pending = cur_pending;
         }
 
         if (ui_active==0 && key_pressed==0 && key_event==0 && encoderNum != newEncoder) {
@@ -281,17 +343,21 @@ int main (void) {
             if (new_volume > 0xFE) new_volume = 0xFE;
             current_volume = (uint8_t)new_volume;
 
-            cs43131_set_pcm_volume(0x30, current_volume, current_volume, true);
-            cs43131_set_pcm_volume(0x31, current_volume, current_volume, true);
+            cs43131_apply_volume_balance(current_volume, cs43131_get_balance());
 
             g_volume_pending = current_volume;
             g_volume_modified_flag = 1;
 
-            float volume_db = -(float)current_volume * 0.5f;
-            printf("Volume = %.1f dB (0x%02X) [Pending save]\r\n", volume_db, current_volume);
+            // 使用整数运算避免浮点格式化依赖（newlib-nano 默认不支持 %f）
+            int vol_neg_int = current_volume >> 1;          // 整数部分：current_volume / 2
+            int vol_neg_frac = (current_volume & 1) * 5;    // 小数部分：余数 * 5 (0.5dB/step)
+#if VOLUME_ADJUST_LOG_ENABLE
+            printf("Volume = -%d.%d dB (0x%02X) [Pending save]\r\n",
+                   vol_neg_int, vol_neg_frac, current_volume);
+#endif
 
             char vol_str[20];
-            sprintf(vol_str, "%.1f dB", volume_db);
+            sprintf(vol_str, "-%d.%d dB", vol_neg_int, vol_neg_frac);
             if (g_has_oled) {
                 OLED_SetVolumeText(vol_str);
             }
@@ -343,7 +409,7 @@ void I2C_ScanBus(void)
         }
         I2C_Send7bitAddress(I2C1, devAddr8, I2C_Direction_Transmitter);
         timeout = 0;
-        // If device ACKs, transmitter mode selected
+        // 如果设备应答，且选择了发送模式
         while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED)) {
             if (++timeout > 5000) { goto next_addr; }
         }

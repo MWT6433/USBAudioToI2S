@@ -79,7 +79,7 @@ volatile uint8_t USBHS_Endp_Busy[DEF_UEP_NUM];
 #include "app_config.h"
 #include "cs43131.h"
 #include "ch32v30x_i2s_device.h"
-#include "volume_storage.h"
+#include "settings_storage.h"
 uint8_t SampleFreq[] = {SAMPLE_FREQ_4B (USBD_AUDIO_FREQ_384)};
 const uint8_t SampleRangeFreq[] = {
     0x07,
@@ -480,13 +480,11 @@ void USBHS_IRQHandler (void) {
                                             freq = (freq << 8) | USBHS_EP0_Buf[1];
                                             freq = (freq << 8) | USBHS_EP0_Buf[0];
                                             if (memcmp (SampleFreq, USBHS_EP0_Buf, sizeof (SampleFreq))) {
-                                                // 严格模式：仅允许支持频率，且硬件切换成功后再更新 SampleFreq
-                                                if (CPLD_RequestFormat(freq) && CPLD_ChangeFormat()) {
-                                                    memcpy (SampleFreq, USBHS_EP0_Buf, USBHS_SetupReqLen);
-                                                    Audio_ResetFeedback (freq);
-                                                    // Link: update both DACs runtime ASP rate/depth
-                                                    cs43131_adjust_asp_runtime(0x30, freq, audio_bits);
-                                                    cs43131_adjust_asp_runtime(0x31, freq, audio_bits);
+                                                // 仅校验频率合法性（纯内存 switch，无 I2C/SPI），立即 ACK；
+                                                // CPLD SPI 切换与 DAC I2C 配置由主循环 AudioMgr_ProcessDeferred() 执行，
+                                                // 避免中断内慢操作抢占主循环 I2C 造成 OLED 菜单死锁。
+                                                if (CPLD_RequestFormat(freq)) {
+                                                    g_pending_rate_hz = freq; // ISR 只记录请求
                                                 } else {
                                                     set_cur_ok = 0;
                                                 }
@@ -529,12 +527,12 @@ void USBHS_IRQHandler (void) {
                 case USBHS_UIS_TOKEN_OUT | DEF_UEP1:
                     len = USBHSD->RX_LEN;
                     if (intst & USBHS_UIS_TOG_OK) {
-                        TIM_Cmd(TIM8, ENABLE);
                         /* Write In Buffer */
                         Audio_FillBuffer ((uint8_t *)&USBHS_EP1_Rx_Buf[USBHS_EP1_Rx_Buf_PTR],len);
                         USBHS_EP1_Rx_Buf_PTR = 1 - USBHS_EP1_Rx_Buf_PTR;
                         USBHSD->UEP1_RX_DMA = (uint32_t)&USBHS_EP1_Rx_Buf[USBHS_EP1_Rx_Buf_PTR];
-                        TIM_Cmd(TIM8, DISABLE);
+                        // 码流活跃时间戳：主循环反馈环据此判断主机是否仍在送流
+                        Audio_NotifyStreamActive();
                     }
                         //  write_log(USBHSD->FRAME_NO >> 13);
                         //  write_log(len);
@@ -563,8 +561,8 @@ void USBHS_IRQHandler (void) {
 
                 /* Sof pack processing */
             case USBHS_UIS_TOKEN_SOF:
-                // 在 SOF 节拍执行一次反馈调节，降低中断数量并稳定控制环
-                Audio_UpdateFeedbackControl();
+                // 反馈值由主循环 Audio_FeedbackTask()（10ms 节拍、SPI 水位比例控制）更新，
+                // SOF 中断只负责把最新值发给主机（EP1 IN，异步反馈端点）
                 freq = Audio_GetFeedback();
                 USBHS_EP1_Tx_Buf[0] = freq;
                 USBHS_EP1_Tx_Buf[1] = freq >> 8;
@@ -937,34 +935,25 @@ void USBHS_IRQHandler (void) {
                     USBHS_DevCurInterface = USBHS_SetupReqValue;
                     if (USBHS_SetupReqIndex == 0x01 && USBHS_SetupReqValue == 0x00) {
                         // Audio Streaming Zero Bandwidth
-                        Audio_SetUnmute (Bit_RESET);
+                        g_pending_mute = 1; // 延迟静音（主循环执行，ISR 不做 I2C）
                     } else if (USBHS_SetupReqIndex == 0x01 && USBHS_SetupReqValue == 0x01) {
                         // Audio Streaming Operational 32Bits
-                        Audio_SetBits (32);
-                        {
-                            uint32_t freq = USB_Audio_GetCurrentFreqHz();
-                            cs43131_adjust_asp_runtime(0x30, freq, 32);
-                            cs43131_adjust_asp_runtime(0x31, freq, 32);
-                        }
-                        Audio_SetUnmute (Bit_SET);
+                        Audio_SetBits (32);   // 立即更新数据面（纯内存，下一包即按新位深转换）
+                        g_pending_bits = 32;  // DAC ASP 位宽延迟到主循环配置
+                        g_pending_bits_valid = 1;
+                        g_pending_mute = 2;   // 延迟取消静音
                     } else if (USBHS_SetupReqIndex == 0x01 && USBHS_SetupReqValue == 0x02) {
                         // Audio Streaming Operational 16Bits
                         Audio_SetBits (16);
-                        {
-                            uint32_t freq = USB_Audio_GetCurrentFreqHz();
-                            cs43131_adjust_asp_runtime(0x30, freq, 16);
-                            cs43131_adjust_asp_runtime(0x31, freq, 16);
-                        }
-                        Audio_SetUnmute (Bit_SET);
+                        g_pending_bits = 16;
+                        g_pending_bits_valid = 1;
+                        g_pending_mute = 2;
                     } else if (USBHS_SetupReqIndex == 0x01 && USBHS_SetupReqValue == 0x03) {
                         // Audio Streaming Operational 24Bits
                         Audio_SetBits (24);
-                        {
-                            uint32_t freq = USB_Audio_GetCurrentFreqHz();
-                            cs43131_adjust_asp_runtime(0x30, freq, 24);
-                            cs43131_adjust_asp_runtime(0x31, freq, 24);
-                        }
-                        Audio_SetUnmute (Bit_SET);
+                        g_pending_bits = 24;
+                        g_pending_bits_valid = 1;
+                        g_pending_mute = 2;
                     }
                     break;
 

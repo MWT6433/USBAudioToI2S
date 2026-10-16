@@ -713,7 +713,9 @@ static void SetSysClockTo144_HSE(void)
 {
     __IO uint32_t StartUpCounter = 0, HSEStatus = 0;
 
-    RCC->CTLR |= ((uint32_t)RCC_HSEON);
+    /* 本板 HSE 为 8MHz 有源时钟（驱动 OSC_IN）：置 HSEBYP 旁路片内反相放大器。
+       HSEBYP 仅允许在 HSEON=0 且 HSERDY=0 时写入，复位后即满足。 */
+    RCC->CTLR |= ((uint32_t)RCC_HSEBYP | RCC_HSEON);
 
     /* Wait till HSE is ready and if Time out is reached exit */
     do

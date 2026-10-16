@@ -9,11 +9,7 @@
 #define KEY_LONG_PRESS  5
 #define KEY_DOUBLE_WAIT 6
 
-// 按键事件定义
-#define EVENT_NONE      0
-#define EVENT_CLICK     1
-#define EVENT_DOUBLE    2
-#define EVENT_LONG      3
+// 事件宏（EVENT_NONE/CLICK/DOUBLE/LONG）已移至 encoder.h
 
 // 时间阈值定义 (单位:ms)
 #define DEBOUNCE_TIME   3
@@ -193,7 +189,7 @@ void Encoder_Init(void) {
 
     // 4. 初始化TIM3时基单元
     TIM_TimeBaseStructure.TIM_Period = 0xFFFF;          // 16位最大计数值
-    TIM_TimeBaseStructure.TIM_Prescaler = 0;            // 不预分频，72MHz计数
+    TIM_TimeBaseStructure.TIM_Prescaler = 0;            // 不预分频，144MHz计数（PCLK1=SYSCLK）
     TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
     TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
     TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
@@ -237,3 +233,5 @@ uint8_t KEY_IsPressed(void)
 {
     return (button.state == KEY_DOWN || button.state == KEY_LONG_PRESS) ? 1 : 0;
 }
+
+//编码器部分通过TIM3的编码器模式实现，用于检测编码器的旋转方向和速度。通过GetEncoder函数获取当前编码器计数值，即可判断编码器的相对旋转方向和步进。编码器按键通过KEY_GetEvent函数获取按键事件，用于判断是否按下了编码器按键。可通过KEY_GetEvent函数获取按键事件，判断是否按下了编码器按键。

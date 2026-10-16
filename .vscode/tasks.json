@@ -1,0 +1,88 @@
+{
+    // VS Code 任务:编译 / 清理 / 烧录(CH32V307 + WCH-Link)
+    // 依赖 MounRiver 自带工具链 + mingw32-make,路径见 settings.json 中 mr.* 配置
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build (CH32V307)",
+            "type": "shell",
+            "command": "${config:mr.make}",
+            "args": ["all"],
+            "options": {
+                "cwd": "${workspaceFolder}/obj",
+                "env": {
+                    "PATH": "${config:mr.toolchain};${config:mr.make};${env:PATH}"
+                }
+            },
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": "$gcc",
+            "detail": "调用 MounRiver 生成的 obj/makefile 全量编译(可增量)"
+        },
+        {
+            "label": "Clean (CH32V307)",
+            "type": "shell",
+            "command": "${config:mr.make}",
+            "args": ["clean"],
+            "options": {
+                "cwd": "${workspaceFolder}/obj",
+                "env": {
+                    "PATH": "${config:mr.toolchain};${config:mr.make};${env:PATH}"
+                }
+            },
+            "problemMatcher": [],
+            "detail": "清理 obj/ 下所有中间文件"
+        },
+        {
+            "label": "Build & Start OpenOCD",
+            "dependsOn": ["Build (CH32V307)", "Start OpenOCD"],
+            "problemMatcher": [],
+            "detail": "F5 调试入口:先编译,再后台启动 OpenOCD"
+        },
+        {
+            "label": "Start OpenOCD",
+            "type": "shell",
+            "command": "start",
+            "args": [
+                "/b", "",
+                "${config:mr.openocd}",
+                "-f", "${config:mr.openocdDir}/bin/wch-riscv.cfg",
+                "-f", "${workspaceFolder}/.vscode/debug.cfg"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:mr.openocdDir}/bin;${env:PATH}"
+                }
+            },
+            "problemMatcher": [],
+            "isBackground": true,
+            "detail": "后台启动 OpenOCD GDB 服务器(:3333),供 F5 调试"
+        },
+        {
+            "label": "Stop OpenOCD",
+            "type": "shell",
+            "command": "taskkill",
+            "args": ["/F", "/IM", "openocd.exe"],
+            "problemMatcher": [],
+            "detail": "调试结束后关闭 OpenOCD"
+        },
+        {
+            "label": "Flash Firmware (WCH-Link)",
+            "type": "shell",
+            "command": "${config:mr.openocd}",
+            "args": [
+                "-f", "${config:mr.openocdDir}/bin/wch-riscv.cfg",
+                "-f", "${workspaceFolder}/.vscode/flash.cfg"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:mr.openocdDir}/bin;${env:PATH}"
+                }
+            },
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "通过 WCH-Link 下载 obj/USBAudio.hex 到芯片并复位运行(需插好仿真器)"
+        }
+    ]
+}

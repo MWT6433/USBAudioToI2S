@@ -15,7 +15,10 @@
 			"link": "WCH-Link",
 			"peripheral_version": "==============2.7",
 			"calibrateSupport": false,
-			"calibrateCommand": ""
+			"calibrateCommand": "",
+			"UIConfigSupport": false,
+			"UIConfigCommand": "",
+			"externalFlashSupport": false
 		},
 		"linkedFolders": [],
 		"removedResources": [
@@ -57,7 +60,7 @@
 					"do_not_inline_functions": false,
 					"assume_freestanding_environment": false,
 					"disable_builtin": false,
-					"single_precision_constants": true,
+					"single_precision_constants": false,
 					"position_independent_code": false,
 					"link_time_optimizer": true,
 					"disable_loop_invariant_move": false,
@@ -279,6 +282,7 @@
 					"copy_only_section_text": false,
 					"copy_only_section_data": false,
 					"copy_only_sections": [],
+					"create_algorithm_file": false,
 					"other_flags": ""
 				},
 				"createList": {
@@ -307,15 +311,15 @@
 					"architecture": "rv32i",
 					"multiply_extension": true,
 					"atomic_extension": true,
-					"floating_point": "single",
+					"floating_point": "none",
 					"compressed_extension": true,
 					"extra_compressed_extension": true,
 					"bit_extension": false,
 					"multiplication_subset_of_the_M_extension": false,
 					"vector_cryptography_extensions": "",
 					"integer_ABI": "ilp32",
-					"floating_point_ABI": "single",
-					"tuning": "default",
+					"floating_point_ABI": "none",
+					"tuning": "rocket",
 					"code_model": "default",
 					"small_data_limit": 8,
 					"align": "default",
@@ -568,6 +572,7 @@
 					"copy_only_section_text": false,
 					"copy_only_section_data": false,
 					"copy_only_sections": [],
+					"create_algorithm_file": false,
 					"other_flags": ""
 				},
 				"createList": {
@@ -630,6 +635,8 @@
 		"disablepowerout": false,
 		"clearcodeflash": false,
 		"disablecodeprotect": true,
+		"flashType": "",
+		"asmFile_path": "",
 		"exepath": "",
 		"exearguments": ""
 	},

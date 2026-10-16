@@ -1,3 +1,32 @@
 {
-    "C_Cpp.default.compilerPath": "D:/mingw64/bin/gcc.exe"
+    // ---- WCH 工具链路径(按本机 MounRiver Studio 2 安装位置修改)----
+    "mr.toolchain": "D:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/Toolchain/RISC-V Embedded GCC12/bin",
+    "mr.openocd": "D:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/OpenOCD/OpenOCD/bin/openocd.exe",
+    "mr.openocdDir": "D:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/OpenOCD/OpenOCD",
+    "mr.gdb": "D:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/Toolchain/RISC-V Embedded GCC12/bin/riscv-wch-elf-gdb.exe",
+    "mr.gcc": "D:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/Toolchain/RISC-V Embedded GCC12/bin/riscv-wch-elf-gcc.exe",
+    "mr.make": "D:/mingw64/bin/mingw32-make.exe",
+
+    // 让 C/C++ 插件使用 RISC-V 交叉编译器做 IntelliSense
+    "C_Cpp.default.compilerPath": "${config:mr.gcc}",
+    "C_Cpp.default.cppStandard": "gnu++17",
+    "C_Cpp.default.cStandard": "gnu99",
+    "C_Cpp.default.defines": [
+        "DAP_FW_V1",
+        "FIFO_LOG",
+        "CH32V30x_D8C"
+    ],
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}",
+        "${workspaceFolder}/Core",
+        "${workspaceFolder}/Debug",
+        "${workspaceFolder}/Peripheral/inc",
+        "${workspaceFolder}/User",
+        "${workspaceFolder}/User/DAP/Include",
+        "${workspaceFolder}/User/U8g2"
+    ],
+    // 不索引 MounRiver 生成的中间产物
+    "files.exclude": {
+        "obj": true
+    }
 }

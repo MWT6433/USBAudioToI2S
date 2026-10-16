@@ -1,0 +1,31 @@
+{
+    // F5 调试:先自动编译 -> 后台启动 OpenOCD -> GDB 连接烧录调试
+    // 需要 VS Code 安装 C/C++ 扩展;WCH-Link 需已连接
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Flash & Debug (WCH-Link)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/obj/USBAudio.elf",
+            "cwd": "${workspaceFolder}",
+            "miDebuggerPath": "${config:mr.gdb}",
+            "miDebuggerServerAddress": "localhost:3333",
+            "preLaunchTask": "Build & Start OpenOCD",
+            "setupCommands": [
+                { "text": "set mem inaccessible-by-default off" },
+                { "text": "set architecture riscv:rv32" },
+                { "text": "set remotetimeout unlimited" },
+                { "text": "set disassembler-options xw" }
+            ],
+            "postRemoteConnectCommands": [
+                { "text": "load" },
+                { "text": "monitor reset halt" }
+            ],
+            "targetArchitecture": "riscv",
+            "MIMode": "gdb",
+            "stopAtEntry": true,
+            "externalConsole": false
+        }
+    ]
+}

@@ -24,21 +24,18 @@
 
 ```mermaid
 flowchart LR
-    PC["主机 · UAC 2.0"] -->|"USB 2.0 HS"| MCU["CH32V307<br/>RISC-V @ 144 MHz<br/>USB Audio · OLED UI"]
-    MCU -->|"I2S 数据"| CPLD["AGRV2KQ32<br/>FIFO · 时钟树"]
+    PC["主机 · UAC 2.0"] -->|"USB 2.0 HS"| MCU["CH32V307<br/>RISC-V @ 144 MHz<br/>USB Audio · OLED UI"]:::mcu
+    MCU -->|"I2S 数据"| CPLD["AGRV2KQ32<br/>FIFO · 时钟树"]:::cpld
     CPLD -.->|"SPI · FIFO 水位反馈"| MCU
     OSC["双晶振<br/>49.152 / 45.1584 MHz"] ==> CPLD
-    CPLD ==>|"MCLK 2× · SCLK · LRCK"| DACL["CS43131 · 左"]
-    CPLD ==>|"MCLK 2× · SCLK · LRCK"| DACR["CS43131 · 右"]
+    CPLD ==>|"MCLK 2× · SCLK · LRCK"| DACL["CS43131 · 左"]:::dac
+    CPLD ==>|"MCLK 2× · SCLK · LRCK"| DACR["CS43131 · 右"]:::dac
     DACL ==> OUT["🎧 4.4 平衡 / 3.5 单端"]
     DACR ==> OUT
 
     classDef mcu fill:#cfe8ff,stroke:#2b6cb0,color:#000
     classDef cpld fill:#ffe9c7,stroke:#b7791f,color:#000
     classDef dac fill:#e9d8fd,stroke:#6b46c1,color:#000
-    class MCU mcu
-    class CPLD cpld
-    DACL,DACR dac
 ```
 
 **全异步**：MCU 用硬件定时器实测 FIFO 水位，在 SOF 中断中动态修正 USB 反馈值。音频时钟始终来自双晶振，与主机时钟彻底解耦。

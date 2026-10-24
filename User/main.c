@@ -212,12 +212,9 @@ int main (void) {
     u8g2_t u8g2;
     if (g_has_oled) {
         u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R2, u8x8_byte_hw_i2c,u8x8_gpio_and_delay);
-        u8g2_InitDisplay(&u8g2);                                                                       
-        u8g2_SetPowerSave(&u8g2, 0);                                                                   
-        u8g2_ClearBuffer(&u8g2);
-        u8g2_SetFont(&u8g2,u8g2_font_6x12_mr);
-        u8g2_DrawStr(&u8g2,10,10,"CH32V307 u8g2 Test");
-        u8g2_SendBuffer(&u8g2);
+        u8g2_InitDisplay(&u8g2);
+        u8g2_SetPowerSave(&u8g2, 0);
+        OLED_DrawSplash(&u8g2);   // ULTRA DUAL 开机画面（含动画，约 1.2s，可按键跳过）
         OLED_BrightnessInit(&u8g2);
         OLED_MarkUpdated();
         Menu_Init(&u8g2);

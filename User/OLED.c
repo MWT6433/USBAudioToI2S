@@ -4,6 +4,7 @@
 #include "cs43131.h"
 #include "ch32v30x_spi_device.h"  // MCLK ÷2 菜单项：CPLD 版本门控与切换接口
 #include "app_config.h"           // VOLUME_ADJUST_LOG_ENABLE（平衡调节日志开关）
+#include "encoder.h"              // 开机画面按键跳过（KEY_GetEvent）
 #include <stdint.h>
 #include <string.h>
 extern volatile uint32_t system_tick;
@@ -356,6 +357,108 @@ static void menu_apply_item(int item)
     }
     (void)cs43131_unmute_both_channels(0x30);
     (void)cs43131_unmute_both_channels(0x31);
+}
+
+// === ULTRA DUAL 开机画面 ===
+// 复刻 docs/logo/ultra_dual_silkscreen.svg（等比缩放 s≈0.171）：
+// ⌜⌜ 错叠方框 = 双 CS43131，左上三弧 = 声波，中央条带 = Cirrus mark（XBM）。
+// 布局常量与 docs/logo/splash_gen.py 一致（该脚本可出像素级预览），改布局请先跑预览。
+#define SPLASH_FX     59    // 前层 ⌐ 角点
+#define SPLASH_FY     19
+#define SPLASH_LEN    24    // 前层边长（竖线向下 / 横线向右）
+#define SPLASH_BDX    3     // 后层错叠偏移
+#define SPLASH_BDY    3
+#define SPLASH_BLEN   24    // 后层顶边长度
+#define SPLASH_BSEG_Y 19    // 后层左边下段：y 偏移（比前层探出 ~3px）
+#define SPLASH_BSEG_L 8
+#define SPLASH_MW     20    // Cirrus mark 尺寸（原稿 113.6x66.4 × s）
+#define SPLASH_MH     11
+#define SPLASH_MX     (SPLASH_FX + 2)
+#define SPLASH_MY     (SPLASH_FY + 6)
+#define SPLASH_TXT_Y  60    // 字标基线
+
+static const uint8_t s_splash_arcs[3] = {5, 11, 17};  // 声波弧半径
+
+/* Cirrus 条带标记 20x11 XBM（docs/logo/splash_gen.py 从丝印 SVG 光栅化） */
+static const uint8_t s_splash_mark_xbm[33] = {
+    0x80,0xFF,0x01,0xFC,0xFF,0x03,0x00,0xFC,0x07,0xFE,0xFF,0x0F,
+    0x00,0xFE,0x0F,0xF0,0xFF,0x0F,0xFF,0xFF,0x0F,0xE0,0xFF,0x07,
+    0xFE,0xFF,0x03,0x00,0xFC,0x01,0xF0,0xFF,0x00,
+};
+
+static void splash_draw_mark(u8g2_t *u8g2, uint8_t arcs, uint8_t back, uint8_t front, uint8_t mark)
+{
+    uint8_t i;
+    for (i = 0; i < arcs; i++) {
+        u8g2_DrawCircle(u8g2, SPLASH_FX, SPLASH_FY, s_splash_arcs[i], U8G2_DRAW_UPPER_LEFT);
+    }
+    if (back) {
+        u8g2_DrawHLine(u8g2, SPLASH_FX + SPLASH_BDX, SPLASH_FY + SPLASH_BDY, SPLASH_BLEN);
+        u8g2_DrawVLine(u8g2, SPLASH_FX + SPLASH_BDX, SPLASH_FY + SPLASH_BSEG_Y, SPLASH_BSEG_L);
+    }
+    if (front) {
+        u8g2_DrawVLine(u8g2, SPLASH_FX, SPLASH_FY, SPLASH_LEN);
+        u8g2_DrawHLine(u8g2, SPLASH_FX, SPLASH_FY, SPLASH_LEN);
+    }
+    if (mark) {
+        u8g2_DrawXBM(u8g2, SPLASH_MX, SPLASH_MY, SPLASH_MW, SPLASH_MH, s_splash_mark_xbm);
+    }
+}
+
+// "ULTRA DUAL" 字标：9x18 伪粗体（双描）+ 3px 字距，水平居中
+static void splash_draw_wordmark(u8g2_t *u8g2)
+{
+    static const char txt[] = "ULTRA DUAL";
+    const char *p;
+    u8g2_uint_t w = 0;
+    u8g2_uint_t x;
+    for (p = txt; *p != '\0'; p++) {
+        w += (u8g2_uint_t)u8g2_GetGlyphWidth(u8g2, (uint16_t)*p) + 3;
+    }
+    w -= 3;
+    x = (u8g2_uint_t)((u8g2_GetDisplayWidth(u8g2) - w) / 2);
+    for (p = txt; *p != '\0'; p++) {
+        (void)u8g2_DrawGlyph(u8g2, x, SPLASH_TXT_Y, (uint16_t)*p);
+        (void)u8g2_DrawGlyph(u8g2, (u8g2_uint_t)(x + 1), SPLASH_TXT_Y, (uint16_t)*p); // 伪粗体
+        x = (u8g2_uint_t)(x + u8g2_GetGlyphWidth(u8g2, (uint16_t)*p) + 3);
+    }
+}
+
+// 开机画面：声波弧逐条出现 → 双层方框 → Cirrus mark → 字标居中展开，对比度同步淡入。
+// 任意按键/旋钮事件可跳过（开发期反复上电不用等）。总时长约 1.2s。
+void OLED_DrawSplash(u8g2_t *u8g2)
+{
+    static const uint8_t contrast_ramp[9] = {1, 30, 60, 100, 140, 180, 210, 235, 255};
+    static const uint8_t reveal_hw[3] = {10, 26, 64};  // 字标揭示半宽
+    uint8_t frame;
+    uint8_t skipped = 0;
+    u8g2_SetFont(u8g2, u8g2_font_9x18_mf);
+    u8g2_SetContrast(u8g2, 1);
+    for (frame = 0; frame < 9; frame++) {
+        u8g2_ClearBuffer(u8g2);
+        u8g2_SetDrawColor(u8g2, 1);
+        splash_draw_mark(u8g2,
+                         (uint8_t)((frame < 3) ? (frame + 1) : 3),
+                         (uint8_t)(frame >= 3),
+                         (uint8_t)(frame >= 4),
+                         (uint8_t)(frame >= 5));
+        if (frame >= 6) {
+            uint8_t k = frame - 6;
+            u8g2_SetClipWindow(u8g2, (u8g2_uint_t)(64 - reveal_hw[k]), 0,
+                                    (u8g2_uint_t)(64 + reveal_hw[k]), 63);
+            splash_draw_wordmark(u8g2);
+            u8g2_SetMaxClipWindow(u8g2);
+        }
+        u8g2_SendBuffer(u8g2);
+        if (KEY_GetEvent() != 0 || GetEncoder() != 0) {  // 按键/旋钮跳过
+            skipped = 1;
+            break;
+        }
+        u8g2_SetContrast(u8g2, contrast_ramp[frame]);
+        Delay_Ms((frame < 6) ? 60 : 50);
+    }
+    u8g2_SetContrast(u8g2, 255);
+    if (!skipped) Delay_Ms(500);  // 完整 logo 停留
 }
 
 void OLED_BrightnessInit(u8g2_t *u8g2)

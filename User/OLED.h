@@ -9,6 +9,7 @@ uint8_t u8x8_byte_hw_i2c(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_p
 uint8_t u8x8_gpio_and_delay(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr);
 
 void OLED_Init (void);
+void OLED_DrawSplash (u8g2_t *u8g2);
 void OLED_ShowRate (u8g2_t *u8g2);
 void OLED_ShowJackMode (u8g2_t *u8g2);
 void OLED_BrightnessInit(u8g2_t *u8g2);
